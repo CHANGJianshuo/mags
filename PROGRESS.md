@@ -34,4 +34,40 @@
 - 重写为 MaGS 内容
 - 待 commit & push
 
+### Step 4 — 服务器 clone MaGS & submodules ✅
+- `/root/data/MaGS` 克隆主仓 OK
+- submodules：
+  - `simple-knn` 从 gitlab.inria.fr 直连 OK
+  - `diff-gaussian-rasterization` GitHub 直连 **卡死**
+    - **解决**：用 `https://ghfast.top/` 代理克隆 → OK
+  - 内嵌 `third_party/glm` 也走同样代理 → OK
+
+### Step 5 — 文件系统踩坑 ✅
+- `/public` 是 **只读** ceph HDD，原计划数据放那里不行
+- `/dev/mapper/data-data`（3.7T）只挂在 `/etc/hosts` 等文件上，不可写入目录
+- **结论**：唯一大容量可写目录是 `/root/data`（50 GB ceph NVMe），工程 + env + 数据全放这里
+
+### Step 6 — Conda 环境 ✅
+- 系统盘只剩 17 GB，conda env 不能放默认的 `~/miniconda3/envs`
+- **解决**：`conda create --prefix /root/data/conda_envs/mags python=3.9 -y` → 放 `/root/data`
+- 配好清华 pip 镜像（`~/.config/pip/pip.conf`）
+
+### Step 7 — PyTorch 安装踩坑
+- 第一次：`pip install torch==2.1.0+cu118 --index-url https://download.pytorch.org/whl/cu118`
+  - **卡死**，pytorch.org 境内连通性差
+- 第二次：`pip install ... -i tsinghua --extra-index-url aliyun-pytorch-wheels/cu118/`
+  - **失败**，aliyun 这是纯文件服务器，不是 PyPI 索引格式
+- 第三次（当前）：直接 wget 下载 wheel，然后本地 pip install
+  - 实测 aliyun 镜像 ~20 MB/s，2.3 GB wheel 约 2 分钟
+  - 进行中
+
+### Step 8 — 数据准备 ✅
+- D-NeRF 数据集（258 MB）
+  - 第一次 `wget github.com/.../D-NeRF-Deformable-GS.zip` → 卡死
+  - **解决**：`wget https://ghfast.top/https://github.com/...` → 35 秒完成
+- 解压到 `/root/data/mags_data/`，8 个场景（bouncingballs, hellwarrior, hook, jumpingjacks, lego, mutant, standup, trex）
+- `D-NeRF_meshes.7z`（15 MB）同样走 ghfast → OK
+- 安装 `p7zip-full`，`7z x` 解压到同目录，meshes 文件合并到每个场景下
+- 验证 `jumpingjacks/` 有 `train/` `train_meshes/` `test/` `test_meshes/`，200 帧 + 200 mesh
+
 ### Step N — (待续)
