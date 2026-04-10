@@ -52,14 +52,16 @@
 - **解决**：`conda create --prefix /root/data/conda_envs/mags python=3.9 -y` → 放 `/root/data`
 - 配好清华 pip 镜像（`~/.config/pip/pip.conf`）
 
-### Step 7 — PyTorch 安装踩坑
+### Step 7 — PyTorch 安装踩坑 ✅
 - 第一次：`pip install torch==2.1.0+cu118 --index-url https://download.pytorch.org/whl/cu118`
   - **卡死**，pytorch.org 境内连通性差
 - 第二次：`pip install ... -i tsinghua --extra-index-url aliyun-pytorch-wheels/cu118/`
-  - **失败**，aliyun 这是纯文件服务器，不是 PyPI 索引格式
-- 第三次（当前）：直接 wget 下载 wheel，然后本地 pip install
-  - 实测 aliyun 镜像 ~20 MB/s，2.3 GB wheel 约 2 分钟
-  - 进行中
+  - **失败**，aliyun 是纯文件服务器，不是 PyPI 索引格式
+- 第三次（成功）：直接 `wget` 下载 wheel，再本地 `pip install`
+  - `torch-2.1.0+cu118-cp39-cp39-linux_x86_64.whl` ~2.3 GB，aliyun 镜像 ~20 MB/s
+  - `torchvision-0.16.0+cu118-cp39-cp39-linux_x86_64.whl` ~6 MB
+- 验证：`torch 2.1.0+cu118, cuda=True, device=NVIDIA GeForce RTX 3090` ✅
+- numpy 首次装成 2.0.2，torch 2.1 不兼容 → 降级 `numpy<2` → 1.26.4
 
 ### Step 8 — 数据准备 ✅
 - D-NeRF 数据集（258 MB）
@@ -70,4 +72,25 @@
 - 安装 `p7zip-full`，`7z x` 解压到同目录，meshes 文件合并到每个场景下
 - 验证 `jumpingjacks/` 有 `train/` `train_meshes/` `test/` `test_meshes/`，200 帧 + 200 mesh
 
-### Step N — (待续)
+### Step 9 — MaGS Python 依赖安装
+- `pip install opencv-python omegaconf torchmetrics open3d plyfile roma tensorboard tqdm`
+- 顺带装了 matplotlib、scipy、pandas、scikit-learn、ipython 等上游依赖
+- **坑**：open3d 0.19.0 把 numpy 再次升到 2.0.2 → torch 又会报错
+  - 修复：再次 `pip install 'numpy<2'` 强制降级
+  - 教训：以后 numpy pin 要写死在 requirements 里
+
+### Step 10 — CUDA toolkit (nvcc) 安装
+- 系统 PATH 里没有 nvcc，simple-knn / diff-gaussian-rasterization 编译需要
+- 方案：conda 装 `nvidia/label/cuda-11.8.0` 频道里的 `cuda-nvcc cuda-cudart-dev cuda-cccl cuda-libraries-dev`
+- 仅装 dev 组件而非整包 cuda-toolkit，避免空间膨胀
+- 进行中（env 从 4.6 G 涨到 6.3 G）
+
+### Step 11 — 子模块编译（待做）
+- `pip install -e submodules/simple-knn`
+- `pip install -e submodules/diff-gaussian-rasterization`
+- 验证 `from diff_gaussian_rasterization import GaussianRasterizer; from simple_knn._C import distCUDA2`
+
+### Step 12 — 运行训练验证（待做）
+- `cd /root/data/MaGS && python train.py config/3dgs.yaml,config/dnerf/jumpingjacks.yaml`
+- 边跑边 `nvidia-smi` 看显存，确认 3090 24 GB 够用
+- 收集 PSNR / LPIPS / SSIM 指标
