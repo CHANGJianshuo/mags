@@ -1,56 +1,71 @@
-# DG-Mesh 实施计划
+# MaGS 复现执行计划
 
-## 阶段 0：本地准备
-- [x] 在本地 `/home/chang/DG_mesh` 初始化 git 仓库
-- [x] 配置 remote → `https://github.com/CHANGJianshuo/mags`
-- [x] SSH 登录服务器，确认硬件 / OS / Python / conda
-- [x] 编写 README、PLAN
-- [ ] 首次 commit & push
+## 阶段 0：本地准备 ✅
+- [x] 本地 git 仓库初始化、remote → `github.com/CHANGJianshuo/mags`
+- [x] SSH 登录服务器、确认硬件 / OS / Python / conda
+- [x] 研究 MaGS 仓库结构（`train.py`、`config/`、submodules）
+- [x] 评估 3090 24GB 对 MaGS 的推理 / 训练可行性 → **充足**
+- [x] 编写 README、PLAN、PROGRESS
 
-## 阶段 1：服务器环境搭建
-- [ ] 在 `/root/data/DG-Mesh` 克隆官方仓库
-- [ ] `conda create -n dgmesh python=3.9 -y`
+## 阶段 1：本地首次 commit & push
+- [ ] `git add . && git commit -m "switch to MaGS reproduction"`
+- [ ] `git push`
+
+## 阶段 2：服务器克隆 MaGS
+- [ ] 在 `/root/data/MaGS` 克隆主仓库
+- [ ] 克隆 submodules：
+  - `submodules/simple-knn` ← https://gitlab.inria.fr/bkerbl/simple-knn.git
+  - `submodules/diff-gaussian-rasterization` ← https://github.com/graphdeco-inria/diff-gaussian-rasterization.git
+
+## 阶段 3：搭建 Python 环境
+- [ ] `conda create -n mags python=3.9 -y`
 - [ ] 安装 PyTorch 2.1 + cu118
   ```
   pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu118
   ```
-- [ ] 安装 CUDA Toolkit 11.8（仅 nvcc，conda 渠道）
-  ```
-  conda install -c "nvidia/label/cuda-11.8.0" cuda-toolkit -y
-  ```
-- [ ] 安装 pytorch3d（FORCE_CUDA=1）
-- [ ] 安装 nvdiffrast、tiny-cuda-nn
-- [ ] 安装 diff-gaussian-rasterization、simple-knn 子模块
 - [ ] `pip install -r requirements.txt`
-- [ ] `python -c "import torch; print(torch.cuda.is_available())"` 验证
+  - opencv-python, omegaconf, torchmetrics, open3d, plyfile, roma
+  - 还需补：tensorboard, tqdm, lpips（torchmetrics 自带）, scikit-image
+- [ ] 安装 submodules（CUDA 编译）
+  ```
+  pip install -e submodules/simple-knn
+  pip install -e submodules/diff-gaussian-rasterization
+  ```
+- [ ] 验证：`python -c "import torch; print(torch.cuda.is_available()); from diff_gaussian_rasterization import GaussianRasterizer; print('OK')"`
 
-## 阶段 2：数据准备
-- [ ] 下载 DG-Mesh 官方 synthetic 数据集（先选 1 个场景，例如 `beagle`）
-- [ ] 数据放置在 `/public/dgmesh_data/`，软链接到工程目录
-- [ ] 检查数据完整性
+## 阶段 4：数据准备
+- [ ] 下载 D-NeRF 原始数据（[官方链接](https://github.com/albertpumarola/D-NeRF) 或 fixed: [Deformable-3D-Gaussians](https://github.com/ingra14m/Deformable-3D-Gaussians)）
+- [ ] 下载 mesh 档案：`https://github.com/wcwac/MaGS/releases/download/v0.0.1/D-NeRF_meshes.7z`（15 MB）
+- [ ] 数据放 `/public/mags_data/dnerf/`，软链接到 `MaGS/dataset/dnerf/`
+- [ ] 解压后目录：
+  ```
+  dataset/dnerf/jumpingjacks/
+  ├── train/  *.png
+  ├── train_meshes/  *.ply
+  ├── test/  *.png
+  └── test_meshes/  *.ply
+  ```
 
-## 阶段 3：跑通训练
-- [ ] 阅读 README 找到训练脚本
-- [ ] 用最小配置启动训练，验证 forward/backward 不报错
-- [ ] 监控显存占用、loss 曲线
-- [ ] 训练若干迭代验证可收敛
+## 阶段 5：跑通训练 / 推理
+- [ ] 启动一次最小训练：`python train.py config/3dgs.yaml,config/dnerf/jumpingjacks.yaml`
+- [ ] 用 nvidia-smi 监控显存峰值
+- [ ] 观察 tensorboard 中 PSNR / loss
+- [ ] 跑到至少出 test 评估（每 1000 iter）
+- [ ] 把 outputs/ 中的最佳 PSNR / SSIM / LPIPS 写到 PROGRESS
 
-## 阶段 4：Mesh 提取与可视化
-- [ ] 运行 mesh 提取脚本
-- [ ] 检查输出 mesh 文件
-- [ ] （可选）渲染对比图
-
-## 阶段 5：记录与提交
+## 阶段 6：周期性 commit
 - 每完成一个阶段：
-  - 更新 PROGRESS.md
-  - `git add . && git commit -m "step N: ..."`
-  - `git push`
+  1. 更新 PROGRESS.md
+  2. `git add . && git commit -m "step N: <概要>"`
+  3. `git push`
 
-## 风险与应对
-| 风险 | 应对 |
+## 风险 & 缓解
+
+| 风险 | 缓解 |
 |---|---|
-| pytorch3d 编译慢/失败 | 用预编译 wheel 或 conda 渠道 |
-| tiny-cuda-nn 编译失败 | 检查 nvcc 是否在 PATH |
-| 系统盘 17GB 不够 | 工程放 /root/data，conda 缓存放 /public |
-| 训练卡住 | 加 timeout，后台跑 + tail 日志 |
-| 网络下载慢 | 用国内镜像或 hf-mirror.com |
+| diff-gaussian-rasterization 编译失败（无 nvcc） | 装 `cuda-toolkit=11.8`（conda 渠道） |
+| pytorch CUDA 与系统驱动不匹配 | 用 cu118，驱动 580 向下兼容 |
+| 数据下载慢 / 国外超时 | 用 hf-mirror、镜像或先 wget 然后 rsync |
+| 训练长（40k iter） | 先训 5k 验证可行，再决定要不要跑完 |
+| 进程 hang 不输出 | 用后台 + tail 监控，加超时 |
+| 系统盘 17GB 不够 | 工程放 /root/data，数据放 /public |
